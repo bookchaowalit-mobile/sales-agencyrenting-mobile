@@ -1,125 +1,155 @@
-import { StyleSheet, Text, View, ScrollView, Pressable } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { Link } from "expo-router";
+import { useMemo, useState } from "react";
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  filterListings,
+  formatMoney,
+  moveInCost,
+  parseMaxRent,
+  SAMPLE_LISTINGS,
+  sortListings,
+  type Listing,
+  type SortKey,
+} from "../../lib/rentals";
 
-export default function HomeScreen() {
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: "price-asc", label: "Cheapest" },
+  { key: "price-desc", label: "Priciest" },
+  { key: "bedrooms", label: "Most beds" },
+];
+const BEDROOMS = [0, 1, 2, 3];
+
+export default function RentalsScreen() {
+  const [query, setQuery] = useState("");
+  const [maxRent, setMaxRent] = useState("");
+  const [minBedrooms, setMinBedrooms] = useState(0);
+  const [sort, setSort] = useState<SortKey>("price-asc");
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const listings = useMemo(
+    () =>
+      sortListings(
+        filterListings(SAMPLE_LISTINGS, { query, maxRent: parseMaxRent(maxRent), minBedrooms }),
+        sort,
+      ),
+    [query, maxRent, minBedrooms, sort],
+  );
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Agencyrenting</Text>
-        <Text style={styles.subtitle}>Agencyrenting — Mobile app (expo)</Text>
-      </View>
-
-      <View style={styles.cardGrid}>
-        <FeatureCard
-          icon="rocket"
-          title="Getting Started"
-          description="Welcome to the mobile version. Start building your experience."
+    <FlatList
+      style={styles.container}
+      data={listings}
+      keyExtractor={(l) => l.id}
+      keyboardShouldPersistTaps="handled"
+      ListHeaderComponent={
+        <View style={styles.filters}>
+          <TextInput
+            style={styles.input}
+            placeholder="Search title, area or agency"
+            value={query}
+            onChangeText={setQuery}
+            accessibilityLabel="Search listings"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Max monthly rent (THB)"
+            keyboardType="number-pad"
+            value={maxRent}
+            onChangeText={setMaxRent}
+            accessibilityLabel="Maximum monthly rent"
+          />
+          <Text style={styles.label}>Minimum bedrooms</Text>
+          <View style={styles.chips}>
+            {BEDROOMS.map((n) => (
+              <Chip key={n} label={n === 0 ? "Any" : `${n}+`} active={minBedrooms === n} onPress={() => setMinBedrooms(n)} />
+            ))}
+          </View>
+          <Text style={styles.label}>Sort</Text>
+          <View style={styles.chips}>
+            {SORTS.map((s) => (
+              <Chip key={s.key} label={s.label} active={sort === s.key} onPress={() => setSort(s.key)} />
+            ))}
+          </View>
+          <Text style={styles.count}>{listings.length} listing(s)</Text>
+        </View>
+      }
+      ListEmptyComponent={<Text style={styles.empty}>No listings match these filters.</Text>}
+      renderItem={({ item }) => (
+        <ListingCard
+          listing={item}
+          expanded={expanded === item.id}
+          onToggle={() => setExpanded(expanded === item.id ? null : item.id)}
         />
-        <FeatureCard
-          icon="code"
-          title="Tech Stack"
-          description="Built with Expo, React Native, and TypeScript."
-        />
-        <FeatureCard
-          icon="phone-portrait"
-          title="Cross-Platform"
-          description="Runs on iOS, Android, and Web from a single codebase."
-        />
-      </View>
-
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          Part of Chaowalit Greepoke's 101 Portfolio Projects
-        </Text>
-        <Link href="https://bookchaowalit.com" asChild>
-          <Pressable>
-            <Text style={styles.link}>bookchaowalit.com</Text>
-          </Pressable>
-        </Link>
-      </View>
-    </ScrollView>
+      )}
+    />
   );
 }
 
-function FeatureCard({
-  icon,
-  title,
-  description,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  description: string;
-}) {
+function ListingCard({ listing, expanded, onToggle }: { listing: Listing; expanded: boolean; onToggle: () => void }) {
+  const cost = moveInCost(listing);
   return (
-    <View style={styles.card}>
-      <Ionicons name={icon} size={28} color="#4A90D9" />
-      <Text style={styles.cardTitle}>{title}</Text>
-      <Text style={styles.cardDescription}>{description}</Text>
-    </View>
+    <Pressable
+      style={styles.card}
+      onPress={onToggle}
+      accessibilityRole="button"
+      accessibilityState={{ expanded }}
+      accessibilityHint="Shows the move-in cost breakdown"
+    >
+      <Text style={styles.cardTitle}>{listing.title}</Text>
+      <Text style={styles.meta}>
+        {listing.area} · {listing.bedrooms === 0 ? "Studio" : `${listing.bedrooms} bed`} · {listing.agency}
+      </Text>
+      <Text style={styles.price}>{formatMoney(listing.monthlyRent)} / month</Text>
+      {expanded && (
+        <View style={styles.breakdown}>
+          <Text style={styles.meta}>First month: {formatMoney(cost.firstMonth)}</Text>
+          <Text style={styles.meta}>
+            Deposit ({listing.depositMonths} mo): {formatMoney(cost.deposit)}
+          </Text>
+          <Text style={styles.meta}>Agency fee: {formatMoney(cost.agencyFee)}</Text>
+          <Text style={styles.total}>Move-in total: {formatMoney(cost.total)}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.chip, active && styles.chipActive]}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+    >
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F5F5",
-  },
-  header: {
-    backgroundColor: "#4A90D9",
-    padding: 24,
-    paddingTop: 16,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.85)",
-    lineHeight: 20,
-  },
-  cardGrid: {
-    padding: 16,
-    gap: 12,
-  },
-  card: {
+  container: { flex: 1, backgroundColor: "#F5F5F5" },
+  filters: { padding: 16, gap: 8 },
+  input: {
     backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    alignItems: "center",
-    gap: 8,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#333",
-  },
-  cardDescription: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  footer: {
-    padding: 24,
-    alignItems: "center",
-    gap: 8,
-  },
-  footerText: {
-    fontSize: 12,
-    color: "#999",
-  },
-  link: {
-    fontSize: 14,
-    color: "#4A90D9",
-    fontWeight: "500",
-  },
+  label: { fontSize: 13, color: "#555", marginTop: 4 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: "#E3ECF7" },
+  chipActive: { backgroundColor: "#4A90D9" },
+  chipText: { color: "#2A5A8C", fontWeight: "500" },
+  chipTextActive: { color: "#fff" },
+  count: { fontSize: 13, color: "#777", marginTop: 4 },
+  empty: { textAlign: "center", color: "#777", marginTop: 32 },
+  card: { backgroundColor: "#fff", borderRadius: 12, padding: 16, marginHorizontal: 16, marginBottom: 12, elevation: 2, gap: 4 },
+  cardTitle: { fontSize: 17, fontWeight: "600", color: "#333" },
+  meta: { fontSize: 14, color: "#666" },
+  price: { fontSize: 16, fontWeight: "700", color: "#2A5A8C" },
+  breakdown: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#eee", gap: 2 },
+  total: { fontSize: 15, fontWeight: "700", color: "#222", marginTop: 4 },
 });
