@@ -10,6 +10,7 @@ import {
   type RentalPrefs,
   formatMoney,
   moveInCost,
+  listingCountLabel,
   parseMaxRent,
   SAMPLE_LISTINGS,
   sortListings,
@@ -63,6 +64,11 @@ export default function RentalsScreen() {
             onChangeText={setMaxRent}
             accessibilityLabel="Maximum monthly rent"
           />
+          {maxRent.trim() !== "" && parseMaxRent(maxRent) === null && (
+            <Text style={styles.hint} accessibilityLiveRegion="polite">
+              Enter the rent as a whole number, e.g. 18500 — the limit is ignored until then.
+            </Text>
+          )}
           <Text style={styles.label}>Minimum bedrooms</Text>
           <View style={styles.chips}>
             {BEDROOMS.map((n) => (
@@ -89,7 +95,7 @@ export default function RentalsScreen() {
               onPress={() => update({ savedOnly: !savedOnly })}
             />
           </View>
-          <Text style={styles.count}>{listings.length} listing(s)</Text>
+          <Text style={styles.count}>{listingCountLabel(listings.length)}</Text>
         </View>
       }
       ListEmptyComponent={
@@ -140,6 +146,7 @@ function ListingCard({
       <Pressable
         onPress={onToggleSaved}
         style={styles.save}
+        hitSlop={12}
         accessibilityRole="button"
         accessibilityLabel={saved ? `Remove ${listing.title} from saved` : `Save ${listing.title}`}
         accessibilityState={{ selected: saved }}
@@ -206,6 +213,7 @@ const styles = StyleSheet.create({
   chipText: { color: "#2A5A8C", fontWeight: "500" },
   chipTextActive: { color: "#fff" },
   count: { fontSize: 13, color: "#777", marginTop: 4 },
+  hint: { fontSize: 13, color: "#8A4B00" },
   empty: { textAlign: "center", color: "#777", marginTop: 32 },
   card: { backgroundColor: "#fff", borderRadius: 12, padding: 16, marginHorizontal: 16, marginBottom: 12, elevation: 2, gap: 4 },
   cardTitle: { fontSize: 17, fontWeight: "600", color: "#333" },

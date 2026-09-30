@@ -48,3 +48,13 @@ Score: 7/10 (was 6/10) — shortlist and filters now persist; still sample data 
 - Accessibility: descriptive labels for bedroom chips, save buttons and profile links.
 - Advisories: `overrides.postcss ^8.5.28` clears the high-severity PostCSS advisory in Expo metro-config (minor bump). Remaining `image-size` (metro, bundler-only), `uuid` (via `xcode`) and `decode-uri-component` (via `query-string@7`) need an Expo SDK major upgrade; deliberately not auto-fixed.
 - Verified: typecheck, lint, 18 vitest tests, Android `expo export` bundle.
+
+## Done in this pass (pass 3)
+
+Score: 7.5/10 (was 7/10) — edge-case hunt in `lib/rentals.ts`.
+
+- Bug: `parseMaxRent` stripped all commas, so "12,50" became a 1,250 THB cap and "7,5" a 75 THB cap (hiding every listing). Commas are now only accepted as thousands groups; decimals with a dot work; unparseable text shows an on-screen hint instead of being silently ignored.
+- Bug: search did not match decomposed accents ("Café") or full-width letters; matching now uses NFKC + lowercase (`searchKey`).
+- "1 listing(s)" → proper pluralisation (`listingCountLabel`).
+- a11y: Save toggle gets `hitSlop` (its visible target was ~24 px tall).
+- Verified: typecheck, lint, 21 vitest tests, Android `expo export`.

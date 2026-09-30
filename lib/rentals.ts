@@ -21,10 +21,15 @@ export type ListingFilter = {
   minBedrooms?: number;
 };
 
+/** Case- and Unicode-normalisation-insensitive text key ("Cafe\u0301" matches "Café"). */
+export function searchKey(text: string): string {
+  return text.normalize("NFKC").toLowerCase();
+}
+
 export function filterListings(listings: Listing[], filter: ListingFilter): Listing[] {
-  const q = (filter.query ?? "").trim().toLowerCase();
+  const q = searchKey((filter.query ?? "").trim());
   return listings.filter((l) => {
-    if (q && ![l.title, l.area, l.agency].some((s) => s.toLowerCase().includes(q))) return false;
+    if (q && ![l.title, l.area, l.agency].some((s) => searchKey(s).includes(q))) return false;
     if (filter.maxRent != null && l.monthlyRent > filter.maxRent) return false;
     if (filter.minBedrooms != null && l.bedrooms < filter.minBedrooms) return false;
     return true;
@@ -57,11 +62,22 @@ export function moveInCost(listing: Pick<Listing, "monthlyRent" | "depositMonths
   return { firstMonth, deposit, agencyFee, total: firstMonth + deposit + agencyFee };
 }
 
-/** Parse an optional max-rent field: blank means "no limit", invalid text also means no limit. */
+/**
+ * Parse an optional max-rent field: blank means "no limit", invalid text also
+ * means no limit (the screen shows a hint). Commas are only accepted as
+ * thousands separators ("18,500"): an ambiguous locale decimal such as
+ * "12,50" is rejected rather than silently read as 1250.
+ */
 export function parseMaxRent(text: string): number | null {
-  const cleaned = text.replace(/[,\s]/g, "");
-  if (!/^\d+$/.test(cleaned)) return null;
-  return Number(cleaned);
+  const cleaned = text.replace(/\s/g, "");
+  if (!/^(\d+|\d{1,3}(,\d{3})+)(\.\d+)?$/.test(cleaned)) return null;
+  const n = Number(cleaned.replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+/** "1 listing", "2 listings". */
+export function listingCountLabel(n: number): string {
+  return `${n} ${n === 1 ? "listing" : "listings"}`;
 }
 
 export function formatMoney(amount: number, currency = "THB"): string {

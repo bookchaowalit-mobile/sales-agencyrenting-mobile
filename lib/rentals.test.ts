@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterListings, formatMoney, moveInCost, parseMaxRent, SAMPLE_LISTINGS, sortListings } from "./rentals";
+import { filterListings, formatMoney, moveInCost, parseMaxRent, SAMPLE_LISTINGS, sortListings, listingCountLabel, searchKey } from "./rentals";
 
 describe("filterListings", () => {
   it("returns everything with an empty filter", () => {
@@ -49,5 +49,27 @@ describe("helpers", () => {
   });
   it("formats money", () => {
     expect(formatMoney(64750)).toBe("THB 64,750");
+  });
+});
+
+describe("pass 3 edge cases", () => {
+  it("does not read a decimal comma as a thousands separator", () => {
+    expect(parseMaxRent("12,50")).toBeNull();
+    expect(parseMaxRent("7,5")).toBeNull();
+    expect(parseMaxRent("18,500")).toBe(18500);
+    expect(parseMaxRent("1,234,567")).toBe(1234567);
+    expect(parseMaxRent("15000.50")).toBe(15000.5);
+    expect(parseMaxRent("0x10")).toBeNull();
+    expect(parseMaxRent("-5")).toBeNull();
+  });
+  it("matches decomposed accents and full-width letters in search", () => {
+    const listing = { ...SAMPLE_LISTINGS[0], title: "Café loft" };
+    expect(filterListings([listing], { query: "Cafe\u0301" })).toHaveLength(1);
+    expect(searchKey("\uFF21SOK")).toBe("asok");
+  });
+  it("pluralises the result count", () => {
+    expect(listingCountLabel(0)).toBe("0 listings");
+    expect(listingCountLabel(1)).toBe("1 listing");
+    expect(listingCountLabel(2)).toBe("2 listings");
   });
 });
