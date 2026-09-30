@@ -12,8 +12,6 @@
 ## Backlog
 
 ### P0
-- Persist user data locally (AsyncStorage via `npx expo install
-  @react-native-async-storage/async-storage`) where the feature holds state.
 - Add real app icons (`assets/icon.png`, `assets/adaptive-icon.png`) and
   reference them from `app.json` before any store build.
 
@@ -41,3 +39,12 @@
   `query-string`).
 - `app.json`: removed references to missing icon files.
 - Removed the placeholder Explore tab.
+
+## Done in this pass (pass 2)
+
+Score: 7/10 (was 6/10) — shortlist and filters now persist; still sample data and no icons.
+
+- Shortlist: Save/Unsave per listing plus a "Saved only" filter; filters, sort and saved ids persist via AsyncStorage (`@react-native-async-storage/async-storage` 2.1.2) through `lib/usePersistentState.ts`, with a versioned, validated codec (`lib/persist.ts`, `isRentalPrefs`) that falls back to defaults on corrupt data.
+- Accessibility: descriptive labels for bedroom chips, save buttons and profile links.
+- Advisories: `overrides.postcss ^8.5.28` clears the high-severity PostCSS advisory in Expo metro-config (minor bump). Remaining `image-size` (metro, bundler-only), `uuid` (via `xcode`) and `decode-uri-component` (via `query-string@7`) need an Expo SDK major upgrade; deliberately not auto-fixed.
+- Verified: typecheck, lint, 18 vitest tests, Android `expo export` bundle.

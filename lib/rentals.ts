@@ -76,3 +76,46 @@ export const SAMPLE_LISTINGS: Listing[] = [
   { id: "5", title: "Old Town loft", area: "Phra Nakhon", agency: "City Nest", monthlyRent: 15000, bedrooms: 1, depositMonths: 1, agencyFeeRate: 0 },
   { id: "6", title: "Lakeside 2-bed", area: "Ratchada", agency: "Green Key", monthlyRent: 21000, bedrooms: 2, depositMonths: 2, agencyFeeRate: 0.5 },
 ];
+
+/** Filters and shortlist the user sets; persisted between sessions. */
+export type RentalPrefs = {
+  query: string;
+  maxRent: string;
+  minBedrooms: number;
+  sort: SortKey;
+  savedIds: string[];
+  savedOnly: boolean;
+};
+
+export const DEFAULT_PREFS: RentalPrefs = {
+  query: "",
+  maxRent: "",
+  minBedrooms: 0,
+  sort: "price-asc",
+  savedIds: [],
+  savedOnly: false,
+};
+
+const SORT_KEYS: SortKey[] = ["price-asc", "price-desc", "bedrooms"];
+
+/** Type guard used when loading preferences from local storage. */
+export function isRentalPrefs(value: unknown): value is RentalPrefs {
+  if (typeof value !== "object" || value === null) return false;
+  const p = value as Record<string, unknown>;
+  return (
+    typeof p.query === "string" &&
+    typeof p.maxRent === "string" &&
+    typeof p.minBedrooms === "number" &&
+    Number.isInteger(p.minBedrooms) &&
+    p.minBedrooms >= 0 &&
+    SORT_KEYS.includes(p.sort as SortKey) &&
+    Array.isArray(p.savedIds) &&
+    p.savedIds.every((id) => typeof id === "string") &&
+    typeof p.savedOnly === "boolean"
+  );
+}
+
+/** Adds or removes a listing id from the shortlist. */
+export function toggleSaved(savedIds: string[], id: string): string[] {
+  return savedIds.includes(id) ? savedIds.filter((x) => x !== id) : [...savedIds, id];
+}

@@ -1,7 +1,13 @@
 import { useMemo, useState } from "react";
+import { valueCodec } from "../../lib/persist";
+import { usePersistentState } from "../../lib/usePersistentState";
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import {
+  DEFAULT_PREFS,
   filterListings,
+  isRentalPrefs,
+  toggleSaved,
+  type RentalPrefs,
   formatMoney,
   moveInCost,
   parseMaxRent,
@@ -17,22 +23,22 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: "bedrooms", label: "Most beds" },
 ];
 const BEDROOMS = [0, 1, 2, 3];
+const prefsCodec = valueCodec(isRentalPrefs);
 
 export default function RentalsScreen() {
-  const [query, setQuery] = useState("");
-  const [maxRent, setMaxRent] = useState("");
-  const [minBedrooms, setMinBedrooms] = useState(0);
-  const [sort, setSort] = useState<SortKey>("price-asc");
+  const [prefs, setPrefs] = usePersistentState<RentalPrefs>("rentals.prefs.v1", DEFAULT_PREFS, prefsCodec);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const { query, maxRent, minBedrooms, sort, savedIds, savedOnly } = prefs;
+  const update = (patch: Partial<RentalPrefs>) => setPrefs((cur) => ({ ...cur, ...patch }));
+  const setQuery = (q: string) => update({ query: q });
+  const setMaxRent = (m: string) => update({ maxRent: m });
+  const setMinBedrooms = (n: number) => update({ minBedrooms: n });
+  const setSort = (s: SortKey) => update({ sort: s });
 
-  const listings = useMemo(
-    () =>
-      sortListings(
-        filterListings(SAMPLE_LISTINGS, { query, maxRent: parseMaxRent(maxRent), minBedrooms }),
-        sort,
-      ),
-    [query, maxRent, minBedrooms, sort],
-  );
+  const listings = useMemo(() => {
+    const pool = savedOnly ? SAMPLE_LISTINGS.filter((l) => savedIds.includes(l.id)) : SAMPLE_LISTINGS;
+    return sortListings(filterListings(pool, { query, maxRent: parseMaxRent(maxRent), minBedrooms }), sort);
+  }, [query, maxRent, minBedrooms, sort, savedIds, savedOnly]);
 
   return (
     <FlatList
@@ -60,7 +66,13 @@ export default function RentalsScreen() {
           <Text style={styles.label}>Minimum bedrooms</Text>
           <View style={styles.chips}>
             {BEDROOMS.map((n) => (
-              <Chip key={n} label={n === 0 ? "Any" : `${n}+`} active={minBedrooms === n} onPress={() => setMinBedrooms(n)} />
+              <Chip
+                key={n}
+                label={n === 0 ? "Any" : `${n}+`}
+                a11yLabel={n === 0 ? "Any number of bedrooms" : `At least ${n} bedroom${n > 1 ? "s" : ""}`}
+                active={minBedrooms === n}
+                onPress={() => setMinBedrooms(n)}
+              />
             ))}
           </View>
           <Text style={styles.label}>Sort</Text>
@@ -69,22 +81,48 @@ export default function RentalsScreen() {
               <Chip key={s.key} label={s.label} active={sort === s.key} onPress={() => setSort(s.key)} />
             ))}
           </View>
+          <View style={styles.chips}>
+            <Chip
+              label={`Saved only (${savedIds.length})`}
+              a11yLabel={`Show saved listings only, ${savedIds.length} saved`}
+              active={savedOnly}
+              onPress={() => update({ savedOnly: !savedOnly })}
+            />
+          </View>
           <Text style={styles.count}>{listings.length} listing(s)</Text>
         </View>
       }
-      ListEmptyComponent={<Text style={styles.empty}>No listings match these filters.</Text>}
+      ListEmptyComponent={
+        <Text style={styles.empty}>
+          {savedOnly && savedIds.length === 0 ? "No saved listings yet — tap Save on a listing." : "No listings match these filters."}
+        </Text>
+      }
       renderItem={({ item }) => (
         <ListingCard
           listing={item}
           expanded={expanded === item.id}
+          saved={savedIds.includes(item.id)}
           onToggle={() => setExpanded(expanded === item.id ? null : item.id)}
+          onToggleSaved={() => update({ savedIds: toggleSaved(savedIds, item.id) })}
         />
       )}
     />
   );
 }
 
-function ListingCard({ listing, expanded, onToggle }: { listing: Listing; expanded: boolean; onToggle: () => void }) {
+function ListingCard({
+  listing,
+  expanded,
+  saved,
+  onToggle,
+  onToggleSaved,
+}: {
+  listing: Listing;
+  expanded: boolean;
+  saved: boolean;
+  onToggle: () => void;
+  onToggleSaved: () => void;
+}) {
   const cost = moveInCost(listing);
   return (
     <Pressable
@@ -99,6 +137,15 @@ function ListingCard({ listing, expanded, onToggle }: { listing: Listing; expand
         {listing.area} · {listing.bedrooms === 0 ? "Studio" : `${listing.bedrooms} bed`} · {listing.agency}
       </Text>
       <Text style={styles.price}>{formatMoney(listing.monthlyRent)} / month</Text>
+      <Pressable
+        onPress={onToggleSaved}
+        style={styles.save}
+        accessibilityRole="button"
+        accessibilityLabel={saved ? `Remove ${listing.title} from saved` : `Save ${listing.title}`}
+        accessibilityState={{ selected: saved }}
+      >
+        <Text style={styles.saveText}>{saved ? "★ Saved" : "☆ Save"}</Text>
+      </Pressable>
       {expanded && (
         <View style={styles.breakdown}>
           <Text style={styles.meta}>First month: {formatMoney(cost.firstMonth)}</Text>
@@ -113,12 +160,23 @@ function ListingCard({ listing, expanded, onToggle }: { listing: Listing; expand
   );
 }
 
-function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+function Chip({
+  label,
+  a11yLabel,
+  active,
+  onPress,
+}: {
+  label: string;
+  a11yLabel?: string;
+  active: boolean;
+  onPress: () => void;
+}) {
   return (
     <Pressable
       onPress={onPress}
       style={[styles.chip, active && styles.chipActive]}
       accessibilityRole="button"
+      accessibilityLabel={a11yLabel ?? label}
       accessibilityState={{ selected: active }}
     >
       <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
@@ -129,6 +187,9 @@ function Chip({ label, active, onPress }: { label: string; active: boolean; onPr
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F5F5F5" },
   filters: { padding: 16, gap: 8 },
+  save: { alignSelf: "flex-start", marginTop: 6, paddingVertical: 4 },
+  saveText: { color: "#1F5FA8", fontWeight: "600" },
+
   input: {
     backgroundColor: "#fff",
     borderWidth: 1,
