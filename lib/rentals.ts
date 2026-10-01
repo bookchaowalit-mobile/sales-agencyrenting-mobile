@@ -1,0 +1,137 @@
+/** Pure logic for browsing agency rental listings and estimating move-in cost. */
+
+export type Listing = {
+  id: string;
+  title: string;
+  area: string;
+  agency: string;
+  monthlyRent: number;
+  bedrooms: number;
+  /** Security deposit expressed in months of rent. */
+  depositMonths: number;
+  /** One-off agency fee as a fraction of one month's rent (0.5 = half a month). */
+  agencyFeeRate: number;
+};
+
+export type SortKey = "price-asc" | "price-desc" | "bedrooms";
+
+export type ListingFilter = {
+  query?: string;
+  maxRent?: number | null;
+  minBedrooms?: number;
+};
+
+/** Case- and Unicode-normalisation-insensitive text key ("Cafe\u0301" matches "Café"). */
+export function searchKey(text: string): string {
+  return text.normalize("NFKC").toLowerCase();
+}
+
+export function filterListings(listings: Listing[], filter: ListingFilter): Listing[] {
+  const q = searchKey((filter.query ?? "").trim());
+  return listings.filter((l) => {
+    if (q && ![l.title, l.area, l.agency].some((s) => searchKey(s).includes(q))) return false;
+    if (filter.maxRent != null && l.monthlyRent > filter.maxRent) return false;
+    if (filter.minBedrooms != null && l.bedrooms < filter.minBedrooms) return false;
+    return true;
+  });
+}
+
+export function sortListings(listings: Listing[], key: SortKey): Listing[] {
+  const copy = [...listings];
+  switch (key) {
+    case "price-asc":
+      return copy.sort((a, b) => a.monthlyRent - b.monthlyRent || a.title.localeCompare(b.title));
+    case "price-desc":
+      return copy.sort((a, b) => b.monthlyRent - a.monthlyRent || a.title.localeCompare(b.title));
+    case "bedrooms":
+      return copy.sort((a, b) => b.bedrooms - a.bedrooms || a.monthlyRent - b.monthlyRent);
+  }
+}
+
+export type MoveInCost = { firstMonth: number; deposit: number; agencyFee: number; total: number };
+
+/** Upfront cash needed to move in: first month + deposit + agency fee (rounded to whole units). */
+export function moveInCost(listing: Pick<Listing, "monthlyRent" | "depositMonths" | "agencyFeeRate">): MoveInCost {
+  const { monthlyRent, depositMonths, agencyFeeRate } = listing;
+  if (monthlyRent < 0 || depositMonths < 0 || agencyFeeRate < 0) {
+    throw new RangeError("rent, deposit and fee must be non-negative");
+  }
+  const firstMonth = Math.round(monthlyRent);
+  const deposit = Math.round(monthlyRent * depositMonths);
+  const agencyFee = Math.round(monthlyRent * agencyFeeRate);
+  return { firstMonth, deposit, agencyFee, total: firstMonth + deposit + agencyFee };
+}
+
+/**
+ * Parse an optional max-rent field: blank means "no limit", invalid text also
+ * means no limit (the screen shows a hint). Commas are only accepted as
+ * thousands separators ("18,500"): an ambiguous locale decimal such as
+ * "12,50" is rejected rather than silently read as 1250.
+ */
+export function parseMaxRent(text: string): number | null {
+  const cleaned = text.replace(/\s/g, "");
+  if (!/^(\d+|\d{1,3}(,\d{3})+)(\.\d+)?$/.test(cleaned)) return null;
+  const n = Number(cleaned.replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+/** "1 listing", "2 listings". */
+export function listingCountLabel(n: number): string {
+  return `${n} ${n === 1 ? "listing" : "listings"}`;
+}
+
+export function formatMoney(amount: number, currency = "THB"): string {
+  return `${currency} ${Math.round(amount).toLocaleString("en-US")}`;
+}
+
+export const SAMPLE_LISTINGS: Listing[] = [
+  { id: "1", title: "Riverside studio", area: "Bang Rak", agency: "Siam Homes", monthlyRent: 12000, bedrooms: 0, depositMonths: 2, agencyFeeRate: 0 },
+  { id: "2", title: "Sukhumvit 1-bed condo", area: "Asok", agency: "City Nest", monthlyRent: 18500, bedrooms: 1, depositMonths: 2, agencyFeeRate: 0.5 },
+  { id: "3", title: "Family townhouse", area: "Bang Na", agency: "Siam Homes", monthlyRent: 28000, bedrooms: 3, depositMonths: 2, agencyFeeRate: 1 },
+  { id: "4", title: "Ari garden 2-bed", area: "Phaya Thai", agency: "Green Key", monthlyRent: 24000, bedrooms: 2, depositMonths: 2, agencyFeeRate: 0.5 },
+  { id: "5", title: "Old Town loft", area: "Phra Nakhon", agency: "City Nest", monthlyRent: 15000, bedrooms: 1, depositMonths: 1, agencyFeeRate: 0 },
+  { id: "6", title: "Lakeside 2-bed", area: "Ratchada", agency: "Green Key", monthlyRent: 21000, bedrooms: 2, depositMonths: 2, agencyFeeRate: 0.5 },
+];
+
+/** Filters and shortlist the user sets; persisted between sessions. */
+export type RentalPrefs = {
+  query: string;
+  maxRent: string;
+  minBedrooms: number;
+  sort: SortKey;
+  savedIds: string[];
+  savedOnly: boolean;
+};
+
+export const DEFAULT_PREFS: RentalPrefs = {
+  query: "",
+  maxRent: "",
+  minBedrooms: 0,
+  sort: "price-asc",
+  savedIds: [],
+  savedOnly: false,
+};
+
+const SORT_KEYS: SortKey[] = ["price-asc", "price-desc", "bedrooms"];
+
+/** Type guard used when loading preferences from local storage. */
+export function isRentalPrefs(value: unknown): value is RentalPrefs {
+  if (typeof value !== "object" || value === null) return false;
+  const p = value as Record<string, unknown>;
+  return (
+    typeof p.query === "string" &&
+    typeof p.maxRent === "string" &&
+    typeof p.minBedrooms === "number" &&
+    Number.isInteger(p.minBedrooms) &&
+    p.minBedrooms >= 0 &&
+    SORT_KEYS.includes(p.sort as SortKey) &&
+    Array.isArray(p.savedIds) &&
+    p.savedIds.every((id) => typeof id === "string") &&
+    typeof p.savedOnly === "boolean"
+  );
+}
+
+/** Adds or removes a listing id from the shortlist. */
+export function toggleSaved(savedIds: string[], id: string): string[] {
+  return savedIds.includes(id) ? savedIds.filter((x) => x !== id) : [...savedIds, id];
+}
