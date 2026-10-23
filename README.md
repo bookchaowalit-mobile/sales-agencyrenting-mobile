@@ -1,5 +1,14 @@
 # Agencyrenting — Mobile
 
+## Template copy
+
+This repo is one of the name-substituted Expo SDK 53 / Expo Router template
+copies in the `bookchaowalit-mobile` org. The canonical template is
+[`bookchaowalit-mobile/community-hub-mobile`](https://github.com/bookchaowalit-mobile/community-hub-mobile).
+Consolidating or archiving this copy is pending owner decision D5 (BD-033); see
+`repository-catalog/portfolio/MOBILE-CONSOLIDATION-2026-10.md` in solo-empire.
+This copy keeps its own code and its own copy of the CI workflow (no shared package).
+
 React Native mobile app (Expo) for **Agencyrenting**.
 
 Part of [Chaowalit Greepoke](https://bookchaowalit.com)'s 101 Portfolio Projects.
@@ -34,9 +43,13 @@ npx expo export --platform android --output-dir dist   # bundle smoke check
 ```
 
 Pure logic lives in `lib/` and is unit-tested with Vitest (`lib/*.test.ts`).
-CI (`.github/workflows/build.yml`) runs all of the above and fails on errors;
-the EAS preview build is owner-triggered (`workflow_dispatch`) and needs the
-`EXPO_TOKEN` secret plus the committed `eas.json`.
+CI (`.github/workflows/ci.yml`) calls the shared
+`bookchaowalit/platform-ci-workflows` v1.1.1 (pinned by SHA): `npm ci`, lint,
+typecheck, `vitest run`, then the Android JS bundle export, plus the security
+scans (gitleaks, Semgrep, OSV-Scanner, Trivy). Nothing is masked. Reviewed
+scanner exceptions, each with a reason and expiry, are in `osv-scanner.toml`
+and `.trivyignore`. EAS / Expo cloud builds are not run in CI: they need the
+owner's Expo account (`EXPO_TOKEN`), so they stay a manual owner step.
 
 ## Build
 
